@@ -135,7 +135,7 @@ from .common import do_parse, read_fn, pdf_suffixes, image_suffixes
     help="""
     The source of the model repository. Default is 'huggingface'.
     """,
-    default='huggingface',
+    default='modelscope',
 )
 
 

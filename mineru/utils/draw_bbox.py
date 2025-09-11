@@ -1,7 +1,10 @@
 import json
+import os
 from io import BytesIO
 
 from loguru import logger
+from pdf2image import convert_from_bytes
+from PIL import Image
 from pypdf import PdfReader, PdfWriter, PageObject
 from reportlab.pdfgen import canvas
 
@@ -208,17 +211,97 @@ def draw_layout_bbox(pdf_info, pdf_bytes, out_path, filename):
 
         layout_bbox_list.append(page_block_list)
 
+    try:
+        images = convert_from_bytes(pdf_bytes)
+        pdf_reader_for_size = PdfReader(BytesIO(pdf_bytes))
+        cleaned_images = []
+
+        for i, page_info in enumerate(pdf_info):
+            if i >= len(images):
+                logger.warning(f"Page index {i} out of bounds for images list (length {len(images)}).")
+                continue
+            
+            page_image = images[i]
+
+            pdf_page = pdf_reader_for_size.pages[i]
+            pdf_width = float(pdf_page.cropbox[2])
+            pdf_height = float(pdf_page.cropbox[3])
+
+            scale_w = page_image.width / pdf_width
+            scale_h = page_image.height / pdf_height
+
+            new_image = Image.new("RGB", page_image.size, "white")
+            
+            all_bboxes_for_page = (
+                #dropped_bbox_list[i] +
+                #tables_body_list[i] +
+                #tables_caption_list[i] +
+                #tables_footnote_list[i] +
+                #imgs_body_list[i] +
+                #imgs_caption_list[i] +
+                #imgs_footnote_list[i] +
+                #titles_list[i] +
+                #texts_list[i] + []
+                #interequations_list[i] +
+                #lists_list[i] +
+                #indexs_list[i]
+            )
+            all_bboxes_for_page = ([texts_list[i][-1]])
+
+            for bbox in all_bboxes_for_page:
+                pil_box = (
+                    bbox[0] * scale_w,
+                    bbox[1] * scale_h,
+                    bbox[2] * scale_w,
+                    bbox[3] * scale_h
+                )
+                
+                pil_box_safe = (
+                    max(0, pil_box[0]),
+                    max(0, pil_box[1]),
+                    min(page_image.width, pil_box[2]),
+                    min(page_image.height, pil_box[3])
+                )
+
+                if pil_box_safe[0] < pil_box_safe[2] and pil_box_safe[1] < pil_box_safe[3]:
+                    cropped_content = page_image.crop(pil_box_safe)
+                    paste_position = (int(pil_box_safe[0]), int(pil_box_safe[1]))
+                    new_image.paste(cropped_content, paste_position)
+            
+            cleaned_images.append(new_image)
+
+        if cleaned_images:
+            base_name, _ = os.path.splitext(filename)
+            clean_pdf_filename = f"{base_name}_clean.pdf"
+            output_pdf_path = os.path.join(out_path, clean_pdf_filename)
+
+            first_image = cleaned_images[0]
+            if first_image.mode != 'RGB':
+                first_image = first_image.convert('RGB')
+            
+            append_list = []
+            for img in cleaned_images[1:]:
+                if img.mode != 'RGB':
+                    append_list.append(img.convert('RGB'))
+                else:
+                    append_list.append(img)
+
+            first_image.save(
+                output_pdf_path, "PDF", resolution=100.0, save_all=True, append_images=append_list
+            )
+
+    except Exception as e:
+        logger.warning(f"Could not generate clean PDF: {e}")
+
     pdf_bytes_io = BytesIO(pdf_bytes)
     pdf_docs = PdfReader(pdf_bytes_io)
     output_pdf = PdfWriter()
 
     for i, page in enumerate(pdf_docs.pages):
-        # 获取原始页面尺寸
         page_width, page_height = float(page.cropbox[2]), float(page.cropbox[3])
         custom_page_size = (page_width, page_height)
 
         packet = BytesIO()
-        # 使用原始PDF的尺寸创建canvas
         c = canvas.Canvas(packet, pagesize=custom_page_size)
 
         c = draw_bbox_without_number(i, dropped_bbox_list, page, c, [158, 158, 158], True)
@@ -239,153 +322,117 @@ def draw_layout_bbox(pdf_info, pdf_bytes, out_path, filename):
         packet.seek(0)
         overlay_pdf = PdfReader(packet)
 
-        # 添加检查确保overlay_pdf.pages不为空
         if len(overlay_pdf.pages) > 0:
             new_page = PageObject(pdf=None)
             new_page.update(page)
             page = new_page
             page.merge_page(overlay_pdf.pages[0])
         else:
-            # 记录日志并继续处理下一个页面
-            # logger.warning(f"layout.pdf: 第{i + 1}页未能生成有效的overlay PDF")
             pass
 
         output_pdf.add_page(page)
 
-    # 保存结果
     with open(f"{out_path}/{filename}", "wb") as f:
         output_pdf.write(f)
 
 
 def draw_span_bbox(pdf_info, pdf_bytes, out_path, filename):
-    text_list = []
-    inline_equation_list = []
-    interline_equation_list = []
-    image_list = []
-    table_list = []
-    dropped_list = []
-    next_page_text_list = []
-    next_page_inline_equation_list = []
-
-    def get_span_info(span):
-        if span['type'] == ContentType.TEXT:
-            if span.get('cross_page', False):
-                next_page_text_list.append(span['bbox'])
-            else:
-                page_text_list.append(span['bbox'])
-        elif span['type'] == ContentType.INLINE_EQUATION:
-            if span.get('cross_page', False):
-                next_page_inline_equation_list.append(span['bbox'])
-            else:
-                page_inline_equation_list.append(span['bbox'])
-        elif span['type'] == ContentType.INTERLINE_EQUATION:
-            page_interline_equation_list.append(span['bbox'])
-        elif span['type'] == ContentType.IMAGE:
-            page_image_list.append(span['bbox'])
-        elif span['type'] == ContentType.TABLE:
-            page_table_list.append(span['bbox'])
+    last_span_bboxes = []
+    next_page_text_spans_bboxes = []
 
     for page in pdf_info:
-        page_text_list = []
-        page_inline_equation_list = []
-        page_interline_equation_list = []
-        page_image_list = []
-        page_table_list = []
-        page_dropped_list = []
+        page_text_spans_bboxes = []
+        if next_page_text_spans_bboxes:
+            page_text_spans_bboxes.extend(next_page_text_spans_bboxes)
+            next_page_text_spans_bboxes.clear()
 
-        # 将跨页的span放到移动到下一页的列表中
-        if len(next_page_text_list) > 0:
-            page_text_list.extend(next_page_text_list)
-            next_page_text_list.clear()
-        if len(next_page_inline_equation_list) > 0:
-            page_inline_equation_list.extend(next_page_inline_equation_list)
-            next_page_inline_equation_list.clear()
-
-        # 构造dropped_list
-        for block in page['discarded_blocks']:
-            if block['type'] == BlockType.DISCARDED:
-                for line in block['lines']:
-                    for span in line['spans']:
-                        page_dropped_list.append(span['bbox'])
-        dropped_list.append(page_dropped_list)
-        # 构造其余useful_list
-        # for block in page['para_blocks']:  # span直接用分段合并前的结果就可以
-        for block in page['preproc_blocks']:
-            if block['type'] in [
-                BlockType.TEXT,
-                BlockType.TITLE,
-                BlockType.INTERLINE_EQUATION,
-                BlockType.LIST,
-                BlockType.INDEX,
+        for block in page.get('preproc_blocks', []):
+            if block.get('type') in [
+                BlockType.TEXT, BlockType.TITLE, BlockType.INTERLINE_EQUATION,
+                BlockType.LIST, BlockType.INDEX,
             ]:
-                for line in block['lines']:
-                    for span in line['spans']:
-                        get_span_info(span)
-            elif block['type'] in [BlockType.IMAGE, BlockType.TABLE]:
-                for sub_block in block['blocks']:
-                    for line in sub_block['lines']:
-                        for span in line['spans']:
-                            get_span_info(span)
-        text_list.append(page_text_list)
-        inline_equation_list.append(page_inline_equation_list)
-        interline_equation_list.append(page_interline_equation_list)
-        image_list.append(page_image_list)
-        table_list.append(page_table_list)
-
-    pdf_bytes_io = BytesIO(pdf_bytes)
-    pdf_docs = PdfReader(pdf_bytes_io)
-    output_pdf = PdfWriter()
-
-    for i, page in enumerate(pdf_docs.pages):
-        # 获取原始页面尺寸
-        page_width, page_height = float(page.cropbox[2]), float(page.cropbox[3])
-        custom_page_size = (page_width, page_height)
-
-        packet = BytesIO()
-        # 使用原始PDF的尺寸创建canvas
-        c = canvas.Canvas(packet, pagesize=custom_page_size)
-
-        # 获取当前页面的数据
-        draw_bbox_without_number(i, text_list, page, c,[255, 0, 0], False)
-        draw_bbox_without_number(i, inline_equation_list, page, c, [0, 255, 0], False)
-        draw_bbox_without_number(i, interline_equation_list, page, c, [0, 0, 255], False)
-        draw_bbox_without_number(i, image_list, page, c, [255, 204, 0], False)
-        draw_bbox_without_number(i, table_list, page, c, [204, 0, 255], False)
-        draw_bbox_without_number(i, dropped_list, page, c, [158, 158, 158], False)
-
-        c.save()
-        packet.seek(0)
-        overlay_pdf = PdfReader(packet)
-
-        # 添加检查确保overlay_pdf.pages不为空
-        if len(overlay_pdf.pages) > 0:
-            new_page = PageObject(pdf=None)
-            new_page.update(page)
-            page = new_page
-            page.merge_page(overlay_pdf.pages[0])
+                for line in block.get('lines', []):
+                    for span in line.get('spans', []):
+                        if span.get('type') == ContentType.TEXT:
+                            if span.get('cross_page', False):
+                                next_page_text_spans_bboxes.append(span['bbox'])
+                            else:
+                                page_text_spans_bboxes.append(span['bbox'])
+            elif block.get('type') in [BlockType.IMAGE, BlockType.TABLE]:
+                for sub_block in block.get('blocks', []):
+                    for line in sub_block.get('lines', []):
+                        for span in line.get('spans', []):
+                            if span.get('type') == ContentType.TEXT:
+                                if span.get('cross_page', False):
+                                    next_page_text_spans_bboxes.append(span['bbox'])
+                                else:
+                                    page_text_spans_bboxes.append(span['bbox'])
+        
+        if page_text_spans_bboxes:
+            last_span_bboxes.append(page_text_spans_bboxes[-1])
         else:
-            # 记录日志并继续处理下一个页面
-            # logger.warning(f"span.pdf: 第{i + 1}页未能生成有效的overlay PDF")
-            pass
+            last_span_bboxes.append(None)
 
-        output_pdf.add_page(page)
+    # Image processing part
+    try:
+        images = convert_from_bytes(pdf_bytes)
+        pdf_reader_for_size = PdfReader(BytesIO(pdf_bytes))
 
-    # Save the PDF
-    with open(f"{out_path}/{filename}", "wb") as f:
-        output_pdf.write(f)
+        for i in range(len(pdf_info)):
+            if i >= len(images):
+                logger.warning(f"Page index {i} out of bounds for images list (length {len(images)}).")
+                continue
+            
+            last_span_bbox = last_span_bboxes[i]
+            if not last_span_bbox:
+                logger.warning(f"No text spans found for page {i}.")
+                continue
+
+            page_image = images[i]
+            pdf_page = pdf_reader_for_size.pages[i]
+            pdf_width = float(pdf_page.cropbox[2])
+            pdf_height = float(pdf_page.cropbox[3])
+            scale_w = page_image.width / pdf_width
+            scale_h = page_image.height / pdf_height
+
+            bbox = last_span_bbox
+            pil_box = (
+                bbox[0] * scale_w,
+                bbox[1] * scale_h,
+                bbox[2] * scale_w,
+                bbox[3] * scale_h
+            )
+            
+            pil_box_safe = (
+                max(0, pil_box[0]),
+                max(0, pil_box[1]),
+                min(page_image.width, pil_box[2]),
+                min(page_image.height, pil_box[3])
+            )
+
+            if pil_box_safe[0] < pil_box_safe[2] and pil_box_safe[1] < pil_box_safe[3]:
+                cropped_content = page_image.crop(pil_box_safe)
+                output_image_path = os.path.join(out_path, f"page_{i}_lastline.png")
+                cropped_content.save(output_image_path, "PNG")
+
+    except Exception as e:
+        logger.warning(f"Could not extract last line images: {e}")
 
 
 if __name__ == "__main__":
     # 读取PDF文件
-    pdf_path = "examples/demo1.pdf"
+    pdf_path = "/Users/xucui/dev/MinerU/donggong/donggong_fail.pdf"
     with open(pdf_path, "rb") as f:
         pdf_bytes = f.read()
 
     # 从json文件读取pdf_info
 
-    json_path = "examples/demo1_1746005777.0863056_middle.json"
+    json_path = "/tmp/output2/donggong_fail/auto/donggong_fail_middle.json"
     with open(json_path, "r", encoding="utf-8") as f:
         pdf_ann = json.load(f)
     pdf_info = pdf_ann["pdf_info"]
     # 调用可视化函数,输出到examples目录
-    draw_layout_bbox(pdf_info, pdf_bytes, "examples", "output_with_layout.pdf")
+    #draw_layout_bbox(pdf_info, pdf_bytes, "examples", "output_with_layout.pdf")
+
+
+    draw_span_bbox(pdf_info, pdf_bytes, "/tmp/examples", "output_with_span_1.pdf")

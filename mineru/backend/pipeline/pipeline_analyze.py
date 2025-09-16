@@ -138,6 +138,30 @@ def doc_analyze(
         pdf_idx, page_idx, pil_img, _, _ = page_info
         result = results[i]
 
+        # --- Start of new logic for cleaning image ---
+        # Create a new white canvas
+        clean_image = PIL.Image.new('RGB', pil_img.size, (255, 255, 255))
+
+        #for block in result:
+        #    if 'poly' in block:
+        #        bbox = block['poly']
+        #        
+        #        # Convert float bbox to int tuple for PIL
+        #        crop_box = (int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3]))
+        #        paste_box = (int(bbox[0]), int(bbox[1]))
+
+        #        # Crop from original image
+        #        region = pil_img.crop(crop_box)
+        #        
+        #        # Paste onto the clean canvas
+        #        clean_image.paste(region, paste_box)
+
+        ## Save the cleaned image
+        #clean_image_filename = f"cleaned_{pdf_idx}_{page_idx}.png"
+        #clean_image.save(clean_image_filename)
+        #logger.info(f"Saved cleaned image: {clean_image_filename}")
+        # --- End of new logic ---
+
         page_info_dict = {'page_no': page_idx, 'width': pil_img.width, 'height': pil_img.height}
         page_dict = {'layout_dets': result, 'page_info': page_info_dict}
 

@@ -69,9 +69,11 @@ def token_to_page_info(token, image_dict, page, image_writer, page_index) -> dic
 
     all_spans = magic_model.get_all_spans()
     # 对image/table/interline_equation的span截图
+    image_counter = 0
     for span in all_spans:
         if span["type"] in [ContentType.IMAGE, ContentType.TABLE, ContentType.INTERLINE_EQUATION]:
-            span = cut_image_and_table(span, page_pil_img, page_img_md5, page_index, image_writer, scale=scale)
+            span = cut_image_and_table(span, page_pil_img, page_img_md5, page_index, image_writer, scale=scale, image_num=image_counter)
+            image_counter += 1
 
     page_blocks = []
     page_blocks.extend([*image_blocks, *table_blocks, *title_blocks, *text_blocks, *interline_equation_blocks])

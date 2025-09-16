@@ -150,11 +150,13 @@ def page_model_info_to_page_info(page_model_info, image_dict, page, image_writer
         return None
 
     """对image/table/interline_equation截图"""
+    image_counter = 0
     for span in spans:
         if span['type'] in [ContentType.IMAGE, ContentType.TABLE, ContentType.INTERLINE_EQUATION]:
             span = cut_image_and_table(
-                span, page_pil_img, page_img_md5, page_index, image_writer, scale=scale
+                span, page_pil_img, page_img_md5, page_index, image_writer, scale=scale, image_num=image_counter
             )
+            image_counter += 1
 
     """span填充进block"""
     block_with_spans, spans = fill_spans_in_blocks(all_bboxes, spans, 0.5)

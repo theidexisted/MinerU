@@ -232,21 +232,21 @@ def draw_layout_bbox(pdf_info, pdf_bytes, out_path, filename):
 
             new_image = Image.new("RGB", page_image.size, "white")
             
+            #dropped_bbox_list[i] +
             all_bboxes_for_page = (
-                #dropped_bbox_list[i] +
-                #tables_body_list[i] +
-                #tables_caption_list[i] +
-                #tables_footnote_list[i] +
-                #imgs_body_list[i] +
-                #imgs_caption_list[i] +
-                #imgs_footnote_list[i] +
-                #titles_list[i] +
-                #texts_list[i] + []
-                #interequations_list[i] +
-                #lists_list[i] +
-                #indexs_list[i]
+                tables_body_list[i] +
+                tables_caption_list[i] +
+                tables_footnote_list[i] +
+                imgs_body_list[i] +
+                imgs_caption_list[i] +
+                imgs_footnote_list[i] +
+                titles_list[i] +
+                texts_list[i] +
+                interequations_list[i] +
+                lists_list[i] +
+                indexs_list[i]
             )
-            all_bboxes_for_page = ([texts_list[i][-1]])
+            #all_bboxes_for_page = ([texts_list[i][-1]])
 
             for bbox in all_bboxes_for_page:
                 pil_box = (
@@ -272,6 +272,7 @@ def draw_layout_bbox(pdf_info, pdf_bytes, out_path, filename):
 
         if cleaned_images:
             base_name, _ = os.path.splitext(filename)
+            base_name = base_name.replace("layout_", "")
             clean_pdf_filename = f"{base_name}_clean.pdf"
             output_pdf_path = os.path.join(out_path, clean_pdf_filename)
 
@@ -378,6 +379,9 @@ def draw_span_bbox(pdf_info, pdf_bytes, out_path, filename):
         images = convert_from_bytes(pdf_bytes)
         pdf_reader_for_size = PdfReader(BytesIO(pdf_bytes))
 
+        img_dir = os.path.join(out_path, "lastline")
+        os.makedirs(img_dir, exist_ok=True)
+
         for i in range(len(pdf_info)):
             if i >= len(images):
                 logger.warning(f"Page index {i} out of bounds for images list (length {len(images)}).")
@@ -410,9 +414,10 @@ def draw_span_bbox(pdf_info, pdf_bytes, out_path, filename):
                 min(page_image.height, pil_box[3])
             )
 
+
             if pil_box_safe[0] < pil_box_safe[2] and pil_box_safe[1] < pil_box_safe[3]:
                 cropped_content = page_image.crop(pil_box_safe)
-                output_image_path = os.path.join(out_path, f"page_{i}_lastline.png")
+                output_image_path = os.path.join(img_dir, f"page_{i:03d}_lastline.png")
                 cropped_content.save(output_image_path, "PNG")
 
     except Exception as e:
@@ -421,18 +426,21 @@ def draw_span_bbox(pdf_info, pdf_bytes, out_path, filename):
 
 if __name__ == "__main__":
     # 读取PDF文件
-    pdf_path = "/Users/xucui/dev/MinerU/donggong/donggong_fail.pdf"
+    pdf_path = "/Users/xucui/dev/scan/small/jianming_part.pdf"
     with open(pdf_path, "rb") as f:
         pdf_bytes = f.read()
 
     # 从json文件读取pdf_info
 
-    json_path = "/tmp/output2/donggong_fail/auto/donggong_fail_middle.json"
+    json_path = "/tmp/a/jianming_part/auto/jianming_part_middle.json"
     with open(json_path, "r", encoding="utf-8") as f:
         pdf_ann = json.load(f)
     pdf_info = pdf_ann["pdf_info"]
+
+    out_path = "/tmp/examples"
+    print("checkout output in:", out_path)
     # 调用可视化函数,输出到examples目录
-    #draw_layout_bbox(pdf_info, pdf_bytes, "examples", "output_with_layout.pdf")
+    draw_layout_bbox(pdf_info, pdf_bytes, out_path, "output_with_layout.pdf")
 
 
-    draw_span_bbox(pdf_info, pdf_bytes, "/tmp/examples", "output_with_span_1.pdf")
+    draw_span_bbox(pdf_info, pdf_bytes, out_path, "output_with_span_1.pdf")

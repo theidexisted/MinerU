@@ -83,6 +83,7 @@ def doc_analyze(
     all_pages_info = []  # 存储(dataset_index, page_index, img, ocr, lang, width, height)
 
     all_image_lists = []
+    all_raw_images = []
     all_pdf_docs = []
     ocr_enabled_list = []
     for pdf_idx, pdf_bytes in enumerate(pdf_bytes_list):
@@ -101,12 +102,16 @@ def doc_analyze(
         images_list, pdf_doc = load_images_from_pdf(pdf_bytes)
         all_image_lists.append(images_list)
         all_pdf_docs.append(pdf_doc)
+        
+        raw_images = []
         for page_idx in range(len(images_list)):
             img_dict = images_list[page_idx]
+            raw_images.append(img_dict['img_pil'])
             all_pages_info.append((
                 pdf_idx, page_idx,
                 img_dict['img_pil'], _ocr_enable, _lang,
             ))
+        all_raw_images.append(raw_images)
 
     # 准备批处理
     images_with_extra_info = [(info[2], info[3], info[4]) for info in all_pages_info]
@@ -167,7 +172,7 @@ def doc_analyze(
 
         infer_results[pdf_idx].append(page_dict)
 
-    return infer_results, all_image_lists, all_pdf_docs, lang_list, ocr_enabled_list
+    return infer_results, all_image_lists, all_pdf_docs, lang_list, ocr_enabled_list, all_raw_images
 
 
 def batch_image_analyze(

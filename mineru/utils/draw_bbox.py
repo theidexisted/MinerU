@@ -3,7 +3,6 @@ import os
 from io import BytesIO
 
 from loguru import logger
-from pdf2image import convert_from_bytes
 from PIL import Image
 from pypdf import PdfReader, PdfWriter, PageObject
 from reportlab.pdfgen import canvas
@@ -113,7 +112,7 @@ def draw_bbox_with_number(i, bbox_list, page, c, rgb_config, fill_config, draw_b
     return c
 
 
-def draw_layout_bbox(pdf_info, pdf_bytes, out_path, filename):
+def draw_layout_bbox(pdf_info, pdf_bytes, out_path, filename, raw_images=None):
     dropped_bbox_list = []
     tables_list, tables_body_list = [], []
     tables_caption_list, tables_footnote_list = [], []
@@ -212,7 +211,8 @@ def draw_layout_bbox(pdf_info, pdf_bytes, out_path, filename):
         layout_bbox_list.append(page_block_list)
 
     try:
-        images = convert_from_bytes(pdf_bytes)
+        images = raw_images
+        assert images is not None
         pdf_reader_for_size = PdfReader(BytesIO(pdf_bytes))
         cleaned_images = []
 
@@ -250,8 +250,8 @@ def draw_layout_bbox(pdf_info, pdf_bytes, out_path, filename):
 
             for bbox in all_bboxes_for_page:
                 pil_box = (
-                    bbox[0] * scale_w,
-                    bbox[1] * scale_h,
+                    bbox[0] * scale_w * 0.9,
+                    bbox[1] * scale_h * 0.9,
                     bbox[2] * scale_w,
                     bbox[3] * scale_h
                 )
@@ -337,7 +337,7 @@ def draw_layout_bbox(pdf_info, pdf_bytes, out_path, filename):
         output_pdf.write(f)
 
 
-def draw_span_bbox(pdf_info, pdf_bytes, out_path, filename):
+def draw_span_bbox(pdf_info, pdf_bytes, out_path, filename, raw_images=None):
     last_span_bboxes = []
     next_page_text_spans_bboxes = []
 
@@ -374,9 +374,10 @@ def draw_span_bbox(pdf_info, pdf_bytes, out_path, filename):
         else:
             last_span_bboxes.append(None)
 
-    # Image processing part
     try:
-        images = convert_from_bytes(pdf_bytes)
+        images = raw_images
+
+        assert images is not None
         pdf_reader_for_size = PdfReader(BytesIO(pdf_bytes))
 
         img_dir = os.path.join(out_path, "lastline")

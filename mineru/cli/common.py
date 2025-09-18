@@ -100,15 +100,16 @@ def _process_output(
         f_make_md_mode,
         middle_json,
         model_output=None,
-        is_pipeline=True
+        is_pipeline=True,
+        raw_images=None
 ):
     from mineru.backend.pipeline.pipeline_middle_json_mkcontent import union_make as pipeline_union_make
     """处理输出文件"""
     if f_draw_layout_bbox:
-        draw_layout_bbox(pdf_info, pdf_bytes, local_md_dir, f"{pdf_file_name}_layout.pdf")
+        draw_layout_bbox(pdf_info, pdf_bytes, local_md_dir, f"{pdf_file_name}_layout.pdf", raw_images=raw_images)
 
     if f_draw_span_bbox:
-        draw_span_bbox(pdf_info, pdf_bytes, local_md_dir, f"{pdf_file_name}_span.pdf")
+        draw_span_bbox(pdf_info, pdf_bytes, local_md_dir, f"{pdf_file_name}_span.pdf", raw_images=raw_images)
 
     if f_dump_orig_pdf:
         md_writer.write(
@@ -177,7 +178,7 @@ def _process_pipeline(
     from mineru.backend.pipeline.model_json_to_middle_json import result_to_middle_json as pipeline_result_to_middle_json
     from mineru.backend.pipeline.pipeline_analyze import doc_analyze as pipeline_doc_analyze
 
-    infer_results, all_image_lists, all_pdf_docs, lang_list, ocr_enabled_list = (
+    infer_results, all_image_lists, all_pdf_docs, lang_list, ocr_enabled_list, all_raw_images = (
         pipeline_doc_analyze(
             pdf_bytes_list, p_lang_list, parse_method=parse_method,
             formula_enable=p_formula_enable, table_enable=p_table_enable
@@ -207,7 +208,8 @@ def _process_pipeline(
             pdf_info, pdf_bytes, pdf_file_name, local_md_dir, local_image_dir,
             md_writer, f_draw_layout_bbox, f_draw_span_bbox, f_dump_orig_pdf,
             f_dump_md, f_dump_content_list, f_dump_middle_json, f_dump_model_output,
-            f_make_md_mode, middle_json, model_json, is_pipeline=True
+            f_make_md_mode, middle_json, model_json, is_pipeline=True,
+            raw_images=all_raw_images[idx]
         )
 
 

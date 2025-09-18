@@ -17,6 +17,7 @@ def download_json(url):
 
 
 def download_and_modify_json(url, local_filename, modifications):
+    return
     """下载JSON并修改内容"""
     if os.path.exists(local_filename):
         data = json.load(open(local_filename))
@@ -59,6 +60,7 @@ def configure_model(model_dir, model_type):
 
 
 def download_pipeline_models():
+    return
     """下载Pipeline模型"""
     model_paths = [
         ModelPath.doclayout_yolo,
@@ -109,6 +111,7 @@ def download_models(model_source, model_type):
 
     Supports downloading pipeline or VLM models from ModelScope or HuggingFace.
     """
+    return
     # 如果未显式指定则交互式输入下载来源
     if model_source is None:
         model_source = click.prompt(
